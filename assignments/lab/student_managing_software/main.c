@@ -2,26 +2,27 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct{
+typedef struct Student{
     char name[100];
     int roll;
     float cgpa;
+    struct Student *link;
 } Student;
 
 void display();
 void display_student_info(Student *s);
-int search_roll(Student *s[], int n);
-int update_student_info(Student *s[], int n);
-int add_student(Student *s[], int n);
-int remove_student(Student *s[], int n);
-int file_open(Student *s[], int n);
-void save_students(Student *s[], int n);
-void free_students(Student *s[], int n);
+Student **search_roll(Student *s);
+int update_student_info(Student *s);
+int add_student(Student *s);
+int remove_student(Student *s);
+void file_open(Student **root);
+void save_students(Student *s);
+void free_students(Student *s);
+Student *create_student_list(FILE *fp);
 
 int main(){
-    Student *s[100];
-    int total = 0;
-    total = file_open(s, total);
+    Student *root = NULL;
+    file_open(&root);
     
     int option;
     do{
@@ -29,30 +30,36 @@ int main(){
         printf("Enter an option: ");
         scanf("%d", &option);
         switch(option){
-            case 1: for(int i = 0; i < total; i++){
-                        display_student_info(s[i]);
+            case 1: Student *parent = root;    
+                    while(parent != NULL){
+                        display_student_info(parent);
+                        parent = parent->link;
                     }
                     printf("\n");
                     break;
 
-            case 2: if(update_student_info(s, total)) printf("Student info updated successfully!\n ");
+            case 2: parent = root;
+                    if(update_student_info(parent)) printf("Student info updated successfully!\n ");
                     else printf("Student info not updated!\n\n");
                     break;
-            case 3: if(total < 100){
-                        s[total] = malloc(sizeof(Student));
-                        if(!s[total]) break;
-                        total = add_student(s, total);
-                        printf("Student added successfully!\n\n");
-                    }
-                    else printf("Student list is full!\n\n");
+
+            case 3: parent = root;
+                    int flag = add_student(parent);
+                    if(flag) printf("Student added successfully!\n\n");
+                    else printf("Failed!!!\n\n");
+                    
                     break;
-            case 4: total = remove_student(s, total);
+
+            case 4: parent = root;
+                    flag = remove_student(parent);
+                    if(flag) printf("Student removed successfully!\n\n");
+                    else printf("Failed!!!\n\n");
                     break;
         }
 
     }while(option != 0);
 
-    free_students(s, total);
+    free_students(root);
 }
 
 void display(){
@@ -69,23 +76,25 @@ void display_student_info(Student *s){
     printf("Roll: %d\tCGPA: %.2f\n", s->roll, s->cgpa);
 }
 
-int search_roll(Student *s[], int n){
-    int roll, i;
-
+Student **search_roll(Student *s){
+    int roll;
     printf("Enter the roll: ");
     scanf("%d", &roll);
 
-    for(i = 0; i < n; i++)
-        if(roll == s[i]->roll) return i;
-    return -1;
+    Student **current = &s;
+    while(*current != NULL){
+        if(roll == (*current)->roll) return current;
+        current = &(*current)->link;
+    }
+    return NULL;
 }
 
-int update_student_info(Student *s[], int n){
-    int i = search_roll(s, n);
+int update_student_info(Student *s){
+    Student **found_student = search_roll(s);
     
-    if(i >= 0){
+    if(found_student != NULL){
         printf("Student found!\n");
-        display_student_info(s[i]);
+        display_student_info(*found_student);
     }
     else{
         printf("Student not found\n");
@@ -102,91 +111,125 @@ int update_student_info(Student *s[], int n){
     switch(options){
         case 1: printf("Enter the name: ");
                 scanf(" %[^\n]", name);
-                strcpy(s[i]->name, name);
+                strcpy((*found_student)->name, name);
                 flag = 1;
                 break;
 
         case 2: printf("Enter the roll: ");
-                scanf("%d", &s[i]->roll);
+                scanf("%d", &(*found_student)->roll);
                 flag = 1;
                 break;
 
         case 3: printf("Enter the CGPA: ");
-                scanf("%f", &s[i]->cgpa);
+                scanf("%f", &(*found_student)->cgpa);
                 flag = 1;
                 break;
     }
 
     if(flag){
-        save_students(s, n);
+        save_students(s);
         return 1;
     }
     else return 0;
 }
 
-int add_student(Student *s[], int n){
+int add_student(Student *s){
+    Student *root = s;
+
+    while(s->link != NULL) s = s->link;
+
+    s->link = malloc(sizeof(Student));
+    if(s->link == NULL) return 0;
+
+    s = s->link;
+
     printf("Enter the name: ");
-    scanf(" %[^\n]", s[n]->name);
+    scanf(" %[^\n]", s->name);
     printf("Enter the roll: ");
-    scanf("%d", &s[n]->roll);
+    scanf("%d", &s->roll);
     printf("Enter the CGPA: ");
-    scanf("%f", &s[n]->cgpa);
-    n++;
-    save_students(s, n);
-    return n;
+    scanf("%f", &s->cgpa);
+    s->link = NULL;
+
+    save_students(root);
+    return 1;
 }
 
-int remove_student(Student *s[], int n){
+int remove_student(Student *s){
     int choose;
-    int index = search_roll(s, n);
-    if(index == -1){
+    Student **found = search_roll(s);
+
+    if(found == NULL){
         printf("Student not found\n");
-        return n;
+        return 0;
     }
 
-    display_student_info(s[index]);
+    display_student_info(*found);
     printf("Are you sure you want to remove this student? (1/0): ");
     scanf("%d", &choose);
 
     if(choose){
-        free(s[index]);
-        for(int i = index; i < n - 1; i++) s[i] = s[i + 1];
-        n--;
-        save_students(s, n);
-        printf("Student removed successfully!\n\n");
+        Student *current = *found;
+        *found = current->link;
+        free(current);
+
+        save_students(s);
+        return 1;
     }
-    return n;
+    return 0;
 }
 
-int file_open(Student *s[], int n){
+void file_open(Student **root){
     FILE *fp = fopen("info.txt", "r");
-    if(!fp) return 0;
+    if(!fp) return;
 
-    fscanf(fp, "%d", &n);
-    
-    for(int i = 0; i < n; i++){
-        s[i] = malloc(sizeof(Student));
-        if(!s[i]) continue;
-        fscanf(fp, " %[^\n]", s[i]->name);
-        fscanf(fp, "%d %f", &s[i]->roll, &s[i]->cgpa);
-    }
+    *root = create_student_list(fp);
     fclose(fp);
-    return n;
 }
 
-void save_students(Student *s[], int n){
+Student *create_student_list(FILE *fp){
+    Student *root = malloc(sizeof(Student));
+    Student *parent = root;
+    Student *child;
+    char name[100];
+
+    while(fscanf(fp, " %99[^\n]", name) != EOF){
+        child = parent;
+
+        strcpy(child->name, name);
+
+        fscanf(fp, "%d", &child->roll);
+        fscanf(fp, "%f", &child->cgpa);
+
+        child->link = malloc(sizeof(Student));
+        parent = child->link;
+    }
+    free(child->link);
+    child->link = NULL;
+
+    return root;
+}   
+
+void save_students(Student *s){
     FILE *fp = fopen("info.txt", "w");
     if(!fp) return;
 
-    fprintf(fp, "%d\n", n);
-    for(int i = 0; i < n; i++){
-        fprintf(fp, "%s\n", s[i]->name);
-        fprintf(fp, "%d %.2f\n", s[i]->roll, s[i]->cgpa);
+    while(s->link != NULL){
+        fprintf(fp, "%s\n", s->name);
+        fprintf(fp, "%d %.2f\n", s->roll, s->cgpa);
+        fprintf(fp, "%p", s->link);
+
+        s = s->link;
     }
 
     fclose(fp);
 }
 
-void free_students(Student *s[], int n){
-    for(int i = 0; i < n; i++) free(s[i]);
+void free_students(Student *s){
+    if(s == NULL){
+        free(s);
+        return;
+    }
+    free_students(s->link);
+    free(s);
 }
